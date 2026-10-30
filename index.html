@@ -16,6 +16,7 @@
 <div id="aviso"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="config.js"></script>
 <script>
@@ -25,7 +26,7 @@
   // Nome do computador: pela URL (?nome=PC 1), salvo no navegador, ou perguntado
   let nome = new URLSearchParams(location.search).get('nome') || localStorage.getItem('nome');
   while (!nome || !nome.trim()) nome = prompt('Nome deste computador (ex: PC 1, PC 2...):') || '';
-  nome = nome.trim();
+  nome = nome.trim().slice(0, 40);
   localStorage.setItem('nome', nome);
   const chave = nome.replace(/[.$#\[\]\/]/g, '-');
 
@@ -34,26 +35,38 @@
     if (e.key.toLowerCase() === 'n') { localStorage.removeItem('nome'); location.href = location.pathname; }
   });
 
-  // Presença: aparece na lista enquanto estiver conectado
-  db.ref('.info/connected').on('value', (s) => {
-    if (!s.val()) return;
-    const r = db.ref('letreiro/telas/' + chave);
-    r.onDisconnect().remove();
-    r.set({ nome });
-  });
-
-  let offset = 0, estado = null, telas = {}, off = {};
-  db.ref('.info/serverTimeOffset').on('value', (s) => offset = s.val() || 0);
-  db.ref('letreiro/estado').on('value', (s) => { estado = s.val(); });
-  db.ref('letreiro/telas').on('value', (s) => telas = s.val() || {});
-  db.ref('letreiro/desativadas').on('value', (s) => off = s.val() || {});
-
   const el = document.getElementById('txt');
   const aviso = document.getElementById('aviso');
+  aviso.textContent = nome + ' — conectando...';
+
+  let offset = 0, estado = null, telas = {}, off = {};
+
+  // Os computadores entram como "anônimos": só leem o letreiro e registram presença.
+  // Quem altera a mensagem é apenas o admin (admin.html, com senha).
+  firebase.auth().signInAnonymously().then(iniciar).catch((e) => {
+    aviso.textContent = nome + ' — erro de login anônimo: ' + e.code;
+  });
+
+  function iniciar() {
+    // Presença: aparece na lista enquanto estiver conectado
+    db.ref('.info/connected').on('value', (s) => {
+      if (!s.val()) return;
+      const r = db.ref('letreiro/telas/' + chave);
+      r.onDisconnect().remove();
+      r.set({ nome });
+    });
+
+    db.ref('.info/serverTimeOffset').on('value', (s) => offset = s.val() || 0);
+    db.ref('letreiro/estado').on('value', (s) => { estado = s.val(); });
+    db.ref('letreiro/telas').on('value', (s) => telas = s.val() || {});
+    db.ref('letreiro/desativadas').on('value', (s) => off = s.val() || {});
+    animar();
+  }
 
   function animar() {
     if (estado) {
       el.textContent = estado.texto;
+      el.style.color = estado.cor || '#39ff14';
       const lista = Object.keys(telas)
         .filter((k) => !off[k])
         .sort((a, b) => telas[a].nome.localeCompare(telas[b].nome, 'pt', { numeric: true }));
@@ -74,7 +87,6 @@
     }
     requestAnimationFrame(animar);
   }
-  animar();
 </script>
 </body>
 </html>
