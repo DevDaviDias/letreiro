@@ -5,77 +5,173 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Painel do Letreiro</title>
 <style>
-  body { font-family: sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; }
-  input[type=text] { width: 100%; font-size: 20px; padding: 8px; box-sizing: border-box; }
-  button { font-size: 18px; padding: 10px 16px; margin: 4px 4px 4px 0; cursor: pointer; }
-  #lista label { display: block; font-size: 20px; margin: 6px 0; }
-  h3 { margin-bottom: 6px; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; margin: 0; padding: 24px 16px; }
+  .caixa { max-width: 720px; margin: 0 auto; }
+  h2 { margin-top: 0; }
+  h3 { margin: 24px 0 8px; color: #39ff14; }
+  input[type=text], input[type=email], input[type=password] {
+    width: 100%; font-size: 18px; padding: 10px; margin: 6px 0; border-radius: 8px;
+    border: 1px solid #444; background: #1c1c1c; color: #fff;
+  }
+  button { font-size: 17px; padding: 10px 16px; margin: 4px 4px 4px 0; cursor: pointer;
+    border: 0; border-radius: 8px; background: #39ff14; color: #000; font-weight: bold; }
+  button.sec { background: #333; color: #eee; }
+  #login { max-width: 360px; margin: 10vh auto; background: #1a1a1a; padding: 24px; border-radius: 12px; }
+  #erro { color: #ff6b6b; min-height: 22px; margin-top: 8px; }
+  #msg { color: #39ff14; min-height: 22px; }
+  #lista label { display: block; font-size: 19px; margin: 8px 0; }
+  .topo { display: flex; justify-content: space-between; align-items: center; }
+  input[type=range] { width: 100%; }
+  input[type=color] { width: 60px; height: 40px; border: 0; background: none; vertical-align: middle; }
 </style>
 </head>
 <body>
-<h2>Painel do Letreiro</h2>
 
-<h3>Frase</h3>
-<input type="text" id="texto" placeholder="Digite a frase">
+<!-- LOGIN -->
+<div id="login">
+  <h2>Entrar no painel</h2>
+  <input type="email" id="email" placeholder="Usuário (e-mail)" autocomplete="username">
+  <input type="password" id="senha" placeholder="Senha" autocomplete="current-password">
+  <button id="entrar" style="width:100%;margin-top:10px">Entrar</button>
+  <div id="erro"></div>
+</div>
 
-<h3>Velocidade: <span id="vv">200</span> px/s</h3>
-<input type="range" id="vel" min="50" max="1000" step="10" value="200" style="width:100%">
-<div><button id="enviar">Enviar alterações</button></div>
+<!-- PAINEL -->
+<div class="caixa" id="painel" style="display:none">
+  <div class="topo">
+    <h2>Painel do Letreiro</h2>
+    <button class="sec" id="sair">Sair</button>
+  </div>
 
-<h3>Computadores conectados (em ordem, da esquerda para a direita)</h3>
-<div id="lista">Nenhum computador conectado.</div>
+  <h3>Frase</h3>
+  <input type="text" id="texto" maxlength="200" placeholder="Digite a frase">
 
-<h3>Controle</h3>
-<button id="iniciar">▶ Iniciar</button>
-<button id="pausar">⏸ Pausar</button>
-<button id="reiniciar">⟲ Reiniciar</button>
+  <h3>Velocidade: <span id="vv">200</span> px/s</h3>
+  <input type="range" id="vel" min="50" max="1000" step="10" value="200">
+
+  <h3>Cor do texto</h3>
+  <input type="color" id="cor" value="#39ff14">
+
+  <div style="margin-top:16px">
+    <button id="enviar">Enviar alterações</button>
+    <span id="msg"></span>
+  </div>
+
+  <h3>Computadores conectados (da esquerda para a direita)</h3>
+  <div id="lista">Nenhum computador conectado.</div>
+
+  <h3>Controle</h3>
+  <button id="iniciar">▶ Iniciar</button>
+  <button id="pausar" class="sec">⏸ Pausar</button>
+  <button id="reiniciar" class="sec">⟲ Reiniciar</button>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="config.js"></script>
 <script>
   firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
   const db = firebase.database();
-  let offset = 0, estado = null, telas = {}, off = {};
+  const $ = (id) => document.getElementById(id);
+
+  let offset = 0, estado = null, telas = {}, off = {}, ligado = false, primeira = true;
   const agora = () => Date.now() + offset;
-  db.ref('.info/serverTimeOffset').on('value', (s) => offset = s.val() || 0);
 
-  // Cria o estado inicial se ainda não existir
-  db.ref('letreiro/estado').once('value', (s) => {
-    if (!s.exists()) db.ref('letreiro/estado').set({
-      texto: 'BEM-VINDOS À ESCOLA!', velocidade: 200, rodando: true, t0: agora(), tPausa: 0,
+  function aviso(t) { $('msg').textContent = t; setTimeout(() => $('msg').textContent = '', 2500); }
+  function falhou(e) {
+    console.error(e);
+    aviso('');
+    $('msg').style.color = '#ff6b6b';
+    $('msg').textContent = e.code === 'PERMISSION_DENIED' || /permission/i.test(e.message)
+      ? 'Sem permissão: esta conta não é a do administrador.' : 'Erro: ' + e.message;
+  }
+
+  // ---------- Login ----------
+  $('entrar').onclick = () => {
+    $('erro').textContent = '';
+    auth.signInWithEmailAndPassword($('email').value.trim(), $('senha').value)
+      .catch((e) => {
+        const m = {
+          'auth/invalid-credential': 'Usuário ou senha incorretos.',
+          'auth/invalid-email': 'E-mail inválido.',
+          'auth/too-many-requests': 'Muitas tentativas. Aguarde um pouco.',
+          'auth/network-request-failed': 'Sem conexão com a internet.',
+        };
+        $('erro').textContent = m[e.code] || 'Erro ao entrar: ' + e.code;
+      });
+  };
+  $('senha').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('entrar').click(); });
+  $('sair').onclick = () => auth.signOut();
+
+  auth.onAuthStateChanged((u) => {
+    const logado = u && !u.isAnonymous;
+    $('login').style.display = logado ? 'none' : '';
+    $('painel').style.display = logado ? '' : 'none';
+    if (logado && !ligado) { ligado = true; iniciarPainel(); }
+  });
+
+  // ---------- Painel ----------
+  function iniciarPainel() {
+    db.ref('.info/serverTimeOffset').on('value', (s) => offset = s.val() || 0);
+
+    db.ref('letreiro/estado').once('value', (s) => {
+      if (!s.exists()) db.ref('letreiro/estado').set({
+        texto: 'BEM-VINDOS À ESCOLA!', velocidade: 200, cor: '#39ff14',
+        rodando: true, t0: agora(), tPausa: 0,
+      }).catch(falhou);
     });
-  });
 
-  let primeira = true;
-  db.ref('letreiro/estado').on('value', (s) => {
-    estado = s.val();
-    if (estado && primeira) { primeira = false; texto.value = estado.texto; vel.value = estado.velocidade; vv.textContent = estado.velocidade; }
-  });
-  db.ref('letreiro/telas').on('value', (s) => { telas = s.val() || {}; desenhar(); });
-  db.ref('letreiro/desativadas').on('value', (s) => { off = s.val() || {}; desenhar(); });
+    db.ref('letreiro/estado').on('value', (s) => {
+      estado = s.val();
+      if (estado && primeira) {
+        primeira = false;
+        $('texto').value = estado.texto;
+        $('vel').value = estado.velocidade;
+        $('vv').textContent = estado.velocidade;
+        $('cor').value = estado.cor || '#39ff14';
+      }
+    });
+    db.ref('letreiro/telas').on('value', (s) => { telas = s.val() || {}; desenhar(); });
+    db.ref('letreiro/desativadas').on('value', (s) => { off = s.val() || {}; desenhar(); });
+  }
 
   function desenhar() {
     const chaves = Object.keys(telas)
       .sort((a, b) => telas[a].nome.localeCompare(telas[b].nome, 'pt', { numeric: true }));
-    lista.innerHTML = chaves.length ? '' : 'Nenhum computador conectado.';
+    $('lista').innerHTML = chaves.length ? '' : 'Nenhum computador conectado.';
     chaves.forEach((k) => {
       const l = document.createElement('label');
       const c = document.createElement('input');
       c.type = 'checkbox'; c.checked = !off[k];
-      c.onchange = () => c.checked
+      c.onchange = () => (c.checked
         ? db.ref('letreiro/desativadas/' + k).remove()
-        : db.ref('letreiro/desativadas/' + k).set(true);
+        : db.ref('letreiro/desativadas/' + k).set(true)).catch(falhou);
       l.append(c, ' ' + telas[k].nome);
-      lista.appendChild(l);
+      $('lista').appendChild(l);
     });
   }
 
-  vel.oninput = () => vv.textContent = vel.value;
-  enviar.onclick = () => db.ref('letreiro/estado').update({ texto: texto.value, velocidade: +vel.value });
-  iniciar.onclick = () => { if (estado && !estado.rodando) db.ref('letreiro/estado').update({ rodando: true, t0: estado.t0 + (agora() - estado.tPausa) }); };
-  pausar.onclick = () => { if (estado && estado.rodando) db.ref('letreiro/estado').update({ rodando: false, tPausa: agora() }); };
-  reiniciar.onclick = () => db.ref('letreiro/estado').update({ rodando: true, t0: agora() });
+  $('vel').oninput = () => $('vv').textContent = $('vel').value;
+
+  $('enviar').onclick = () => {
+    $('msg').style.color = '#39ff14';
+    db.ref('letreiro/estado').update({
+      texto: $('texto').value, velocidade: +$('vel').value, cor: $('cor').value,
+    }).then(() => aviso('✔ Enviado!')).catch(falhou);
+  };
+  $('iniciar').onclick = () => {
+    if (estado && !estado.rodando)
+      db.ref('letreiro/estado').update({ rodando: true, t0: estado.t0 + (agora() - estado.tPausa) }).catch(falhou);
+  };
+  $('pausar').onclick = () => {
+    if (estado && estado.rodando)
+      db.ref('letreiro/estado').update({ rodando: false, tPausa: agora() }).catch(falhou);
+  };
+  $('reiniciar').onclick = () =>
+    db.ref('letreiro/estado').update({ rodando: true, t0: agora() }).catch(falhou);
 </script>
 </body>
 </html>
