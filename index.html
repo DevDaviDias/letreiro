@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Letreiro</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: sans-serif; }
+  #txt { position: absolute; top: 50%; left: 0; white-space: nowrap; color: #39ff14;
+         font: bold 45vh sans-serif; will-change: transform; }
+  #aviso { position: absolute; bottom: 8px; left: 8px; color: #444; font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="txt"></div>
+<div id="aviso"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+<script>
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // Nome do computador: pela URL (?nome=PC 1), salvo no navegador, ou perguntado
+  let nome = new URLSearchParams(location.search).get('nome') || localStorage.getItem('nome');
+  while (!nome || !nome.trim()) nome = prompt('Nome deste computador (ex: PC 1, PC 2...):') || '';
+  nome = nome.trim();
+  localStorage.setItem('nome', nome);
+  const chave = nome.replace(/[.$#\[\]\/]/g, '-');
+
+  // Tecle N para trocar o nome deste computador
+  document.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'n') { localStorage.removeItem('nome'); location.href = location.pathname; }
+  });
+
+  // Presença: aparece na lista enquanto estiver conectado
+  db.ref('.info/connected').on('value', (s) => {
+    if (!s.val()) return;
+    const r = db.ref('letreiro/telas/' + chave);
+    r.onDisconnect().remove();
+    r.set({ nome });
+  });
+
+  let offset = 0, estado = null, telas = {}, off = {};
+  db.ref('.info/serverTimeOffset').on('value', (s) => offset = s.val() || 0);
+  db.ref('letreiro/estado').on('value', (s) => { estado = s.val(); });
+  db.ref('letreiro/telas').on('value', (s) => telas = s.val() || {});
+  db.ref('letreiro/desativadas').on('value', (s) => off = s.val() || {});
+
+  const el = document.getElementById('txt');
+  const aviso = document.getElementById('aviso');
+
+  function animar() {
+    if (estado) {
+      el.textContent = estado.texto;
+      const lista = Object.keys(telas)
+        .filter((k) => !off[k])
+        .sort((a, b) => telas[a].nome.localeCompare(telas[b].nome, 'pt', { numeric: true }));
+      const idx = lista.indexOf(chave);
+      aviso.textContent = nome + (idx < 0 ? ' (desativado)' : '') + ' — tecle N para trocar o nome';
+      el.style.display = idx < 0 ? 'none' : '';
+      if (idx >= 0) {
+        const W = innerWidth;
+        const painel = W * lista.length;
+        const agora = Date.now() + offset;
+        const decorrido = ((estado.rodando ? agora : estado.tPausa) - estado.t0) / 1000;
+        const ciclo = painel + el.offsetWidth;
+        const x = -el.offsetWidth + ((decorrido * estado.velocidade) % ciclo); // esquerda -> direita
+        el.style.transform = `translate(${x - idx * W}px, -50%)`;
+      }
+    } else {
+      aviso.textContent = nome + ' — aguardando o painel (admin.html)...';
+    }
+    requestAnimationFrame(animar);
+  }
+  animar();
+</script>
+</body>
+</html>

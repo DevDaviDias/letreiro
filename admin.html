@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel do Letreiro</title>
+<style>
+  body { font-family: sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; }
+  input[type=text] { width: 100%; font-size: 20px; padding: 8px; box-sizing: border-box; }
+  button { font-size: 18px; padding: 10px 16px; margin: 4px 4px 4px 0; cursor: pointer; }
+  #lista label { display: block; font-size: 20px; margin: 6px 0; }
+  h3 { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<h2>Painel do Letreiro</h2>
+
+<h3>Frase</h3>
+<input type="text" id="texto" placeholder="Digite a frase">
+
+<h3>Velocidade: <span id="vv">200</span> px/s</h3>
+<input type="range" id="vel" min="50" max="1000" step="10" value="200" style="width:100%">
+<div><button id="enviar">Enviar alterações</button></div>
+
+<h3>Computadores conectados (em ordem, da esquerda para a direita)</h3>
+<div id="lista">Nenhum computador conectado.</div>
+
+<h3>Controle</h3>
+<button id="iniciar">▶ Iniciar</button>
+<button id="pausar">⏸ Pausar</button>
+<button id="reiniciar">⟲ Reiniciar</button>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+<script>
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  let offset = 0, estado = null, telas = {}, off = {};
+  const agora = () => Date.now() + offset;
+  db.ref('.info/serverTimeOffset').on('value', (s) => offset = s.val() || 0);
+
+  // Cria o estado inicial se ainda não existir
+  db.ref('letreiro/estado').once('value', (s) => {
+    if (!s.exists()) db.ref('letreiro/estado').set({
+      texto: 'BEM-VINDOS À ESCOLA!', velocidade: 200, rodando: true, t0: agora(), tPausa: 0,
+    });
+  });
+
+  let primeira = true;
+  db.ref('letreiro/estado').on('value', (s) => {
+    estado = s.val();
+    if (estado && primeira) { primeira = false; texto.value = estado.texto; vel.value = estado.velocidade; vv.textContent = estado.velocidade; }
+  });
+  db.ref('letreiro/telas').on('value', (s) => { telas = s.val() || {}; desenhar(); });
+  db.ref('letreiro/desativadas').on('value', (s) => { off = s.val() || {}; desenhar(); });
+
+  function desenhar() {
+    const chaves = Object.keys(telas)
+      .sort((a, b) => telas[a].nome.localeCompare(telas[b].nome, 'pt', { numeric: true }));
+    lista.innerHTML = chaves.length ? '' : 'Nenhum computador conectado.';
+    chaves.forEach((k) => {
+      const l = document.createElement('label');
+      const c = document.createElement('input');
+      c.type = 'checkbox'; c.checked = !off[k];
+      c.onchange = () => c.checked
+        ? db.ref('letreiro/desativadas/' + k).remove()
+        : db.ref('letreiro/desativadas/' + k).set(true);
+      l.append(c, ' ' + telas[k].nome);
+      lista.appendChild(l);
+    });
+  }
+
+  vel.oninput = () => vv.textContent = vel.value;
+  enviar.onclick = () => db.ref('letreiro/estado').update({ texto: texto.value, velocidade: +vel.value });
+  iniciar.onclick = () => { if (estado && !estado.rodando) db.ref('letreiro/estado').update({ rodando: true, t0: estado.t0 + (agora() - estado.tPausa) }); };
+  pausar.onclick = () => { if (estado && estado.rodando) db.ref('letreiro/estado').update({ rodando: false, tPausa: agora() }); };
+  reiniciar.onclick = () => db.ref('letreiro/estado').update({ rodando: true, t0: agora() });
+</script>
+</body>
+</html>
