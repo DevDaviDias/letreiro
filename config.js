@@ -1,3 +1,6 @@
+// Configuração do Firebase (projeto letreiro-d470f)
+// IMPORTANTE: confira o databaseURL na página "Realtime Database" do console.
+// Se o endereço de lá for diferente, troque aqui.
 const firebaseConfig = {
   apiKey: "AIzaSyB679ryibvQPteeCAq-1wAiaWMcVfrFnc0",
   authDomain: "letreiro-d470f.firebaseapp.com",
