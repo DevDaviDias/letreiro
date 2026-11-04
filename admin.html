@@ -33,10 +33,11 @@
 <input type="range" id="vel" min="50" max="1000" step="10" value="200" style="width:100%">
 <div><button id="enviar">Enviar alterações</button></div>
 
-<h3>Computadores conectados (em ordem, da esquerda para a direita)</h3>
+<h3>Computadores conectados (ordem de passagem: 1º, 2º, 3º...)</h3>
 <div id="lista">Nenhum computador conectado.</div>
 
 <h3>Controle</h3>
+<button id="atualizar">🔄 Atualizar todos os computadores</button><br>
 <button id="iniciar">▶ Iniciar</button>
 <button id="pausar">⏸ Pausar</button>
 <button id="reiniciar">⟲ Reiniciar</button>
@@ -47,7 +48,14 @@
 <script>
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
-  let offset = 0, estado = null, telas = {}, off = {};
+  let offset = 0, estado = null, telas = {}, off = {}, ordem = [];
+  function ordenar(telas, ordem) {
+    const ini = ordem.filter((k) => telas[k]);
+    const resto = Object.keys(telas).filter((k) => !ini.includes(k))
+      .sort((a, b) => telas[a].nome.localeCompare(telas[b].nome, 'pt', { numeric: true }));
+    return ini.concat(resto);
+  }
+  const lerOrdem = (v) => Array.isArray(v) ? v : Object.values(v || {});
   const agora = () => Date.now() + offset;
   db.ref('.info/serverTimeOffset').on('value', (s) => offset = s.val() || 0);
 
@@ -65,22 +73,34 @@
   });
   db.ref('letreiro/telas').on('value', (s) => { telas = s.val() || {}; desenhar(); });
   db.ref('letreiro/desativadas').on('value', (s) => { off = s.val() || {}; desenhar(); });
+  db.ref('letreiro/ordem').on('value', (s) => { ordem = lerOrdem(s.val()); desenhar(); });
 
   function desenhar() {
-    const chaves = Object.keys(telas)
-      .sort((a, b) => telas[a].nome.localeCompare(telas[b].nome, 'pt', { numeric: true }));
+    const chaves = ordenar(telas, ordem);
     lista.innerHTML = chaves.length ? '' : 'Nenhum computador conectado.';
-    chaves.forEach((k) => {
+    chaves.forEach((k, i) => {
       const l = document.createElement('label');
       const c = document.createElement('input');
       c.type = 'checkbox'; c.checked = !off[k];
       c.onchange = () => c.checked
         ? db.ref('letreiro/desativadas/' + k).remove()
         : db.ref('letreiro/desativadas/' + k).set(true);
-      l.append(c, ' ' + telas[k].nome);
+      l.append(c, ' ' + (i + 1) + 'º — ' + telas[k].nome + ' ');
+      const sobe = document.createElement('button'); sobe.textContent = '▲'; sobe.onclick = () => mover(chaves, i, -1);
+      const desce = document.createElement('button'); desce.textContent = '▼'; desce.onclick = () => mover(chaves, i, 1);
+      l.append(sobe, desce);
       lista.appendChild(l);
     });
   }
+
+  function mover(chaves, i, d) {
+    const j = i + d;
+    if (j < 0 || j >= chaves.length) return;
+    const n = chaves.slice();
+    [n[i], n[j]] = [n[j], n[i]];
+    db.ref('letreiro/ordem').set(n);
+  }
+  atualizar.onclick = () => db.ref('letreiro/recarregar').set(Date.now());
 
   vel.oninput = () => vv.textContent = vel.value;
   enviar.onclick = () => db.ref('letreiro/estado').update({ texto: texto.value, velocidade: +vel.value, fonte: fonte.value });

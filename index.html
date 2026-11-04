@@ -43,11 +43,26 @@
     r.set({ nome });
   });
 
-  let offset = 0, estado = null, telas = {}, off = {};
+  let offset = 0, estado = null, telas = {}, off = {}, ordem = [];
+  function ordenar(telas, ordem) {
+    const ini = ordem.filter((k) => telas[k]);
+    const resto = Object.keys(telas).filter((k) => !ini.includes(k))
+      .sort((a, b) => telas[a].nome.localeCompare(telas[b].nome, 'pt', { numeric: true }));
+    return ini.concat(resto);
+  }
+  const lerOrdem = (v) => Array.isArray(v) ? v : Object.values(v || {});
   db.ref('.info/serverTimeOffset').on('value', (s) => offset = s.val() || 0);
   db.ref('letreiro/estado').on('value', (s) => { estado = s.val(); });
   db.ref('letreiro/telas').on('value', (s) => telas = s.val() || {});
   db.ref('letreiro/desativadas').on('value', (s) => off = s.val() || {});
+  db.ref('letreiro/ordem').on('value', (s) => ordem = lerOrdem(s.val()));
+
+  // Botão "Atualizar todos" do painel: recarrega esta página
+  let primeiraRec = true;
+  db.ref('letreiro/recarregar').on('value', () => {
+    if (primeiraRec) { primeiraRec = false; return; }
+    location.reload();
+  });
 
   const el = document.getElementById('txt');
   const aviso = document.getElementById('aviso');
@@ -56,20 +71,20 @@
     if (estado) {
       el.textContent = estado.texto;
       el.style.fontFamily = estado.fonte || 'Arial, Helvetica, sans-serif';
-      const lista = Object.keys(telas)
-        .filter((k) => !off[k])
-        .sort((a, b) => telas[a].nome.localeCompare(telas[b].nome, 'pt', { numeric: true }));
+      const lista = ordenar(telas, ordem).filter((k) => !off[k]);
       const idx = lista.indexOf(chave);
       aviso.textContent = nome + (idx < 0 ? ' (desativado)' : '') + ' — tecle N para trocar o nome';
       el.style.display = idx < 0 ? 'none' : '';
       if (idx >= 0) {
         const W = innerWidth;
         const u = el.offsetWidth / W; // largura do texto em "telas"
-        const ciclo = lista.length + u;
+        const v = estado.velocidade / 1000; // telas por segundo
+        const T = (1 + u) / v; // tempo para atravessar um computador
         const agora = Date.now() + offset;
-        const decorrido = ((estado.rodando ? agora : estado.tPausa) - estado.t0) / 1000;
-        const x = -u + ((decorrido * estado.velocidade / 1000) % ciclo);
-        el.style.transform = `translate(${(x - idx) * W}px, -50%)`;
+        const e = Math.max(0, ((estado.rodando ? agora : estado.tPausa) - estado.t0) / 1000);
+        const vez = Math.floor(e / T) % lista.length; // de quem é a vez
+        el.style.visibility = vez === idx ? 'visible' : 'hidden';
+        el.style.transform = `translate(${(-u + (e % T) * v) * W}px, -50%)`;
       }
     } else {
       aviso.textContent = nome + ' — aguardando o painel (admin.html)...';
