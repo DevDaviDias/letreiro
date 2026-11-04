@@ -71,6 +71,8 @@
     if (estado) {
       el.textContent = estado.texto;
       el.style.fontFamily = estado.fonte || 'Arial, Helvetica, sans-serif';
+      el.style.fontSize = (estado.tamanho || 12) + 'vw';
+      el.style.color = estado.cor || '#39ff14';
       const lista = ordenar(telas, ordem).filter((k) => !off[k]);
       const idx = lista.indexOf(chave);
       aviso.textContent = nome + (idx < 0 ? ' (desativado)' : '') + ' — tecle N para trocar o nome';
@@ -79,12 +81,22 @@
         const W = innerWidth;
         const u = el.offsetWidth / W; // largura do texto em "telas"
         const v = estado.velocidade / 1000; // telas por segundo
-        const T = (1 + u) / v; // tempo para atravessar um computador
         const agora = Date.now() + offset;
         const e = Math.max(0, ((estado.rodando ? agora : estado.tPausa) - estado.t0) / 1000);
-        const vez = Math.floor(e / T) % lista.length; // de quem é a vez
-        el.style.visibility = vez === idx ? 'visible' : 'hidden';
-        el.style.transform = `translate(${(-u + (e % T) * v) * W}px, -50%)`;
+        if (estado.modo === 'sequencia') {
+          // um computador por vez
+          const T = (1 + u) / v;
+          const vez = Math.floor(e / T) % lista.length;
+          el.style.visibility = vez === idx ? 'visible' : 'hidden';
+          el.style.transform = `translate(${(-u + (e % T) * v) * W}px, -50%)`;
+        } else {
+          // contínuo: o texto atravessa todas as telas emendado
+          const g = (estado.moldura || 0) / 100; // espaço da moldura entre as telas
+          const P = lista.length + (lista.length - 1) * g;
+          const x = -u + ((e * v) % (P + u));
+          el.style.visibility = 'visible';
+          el.style.transform = `translate(${(x - idx * (1 + g)) * W}px, -50%)`;
+        }
       }
     } else {
       aviso.textContent = nome + ' — aguardando o painel (admin.html)...';
