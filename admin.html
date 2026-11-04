@@ -29,6 +29,22 @@
   <option value="Pacifico, cursive">Pacifico (cursiva)</option>
 </select>
 
+<h3>Modo</h3>
+<select id="modo" style="font-size:20px;padding:6px">
+  <option value="continuo">Contínuo (o texto passa de uma tela para a outra, emendado)</option>
+  <option value="sequencia">Um computador por vez</option>
+</select>
+
+<h3>Tamanho da letra: <span id="tv">12</span></h3>
+<input type="range" id="tam" min="5" max="30" step="1" value="12" style="width:100%">
+
+<h3>Cor da letra</h3>
+<input type="color" id="cor" value="#39ff14" style="width:80px;height:40px">
+
+<h3>Moldura entre as telas: <span id="mv">0</span>%</h3>
+<input type="range" id="mold" min="0" max="15" step="1" value="0" style="width:100%">
+<small>Aumente se a borda dos notebooks "come" um pedaço do texto na emenda.</small>
+
 <h3>Velocidade: <span id="vv">200</span> (maior = mais rápido)</h3>
 <input type="range" id="vel" min="50" max="1000" step="10" value="200" style="width:100%">
 <div><button id="enviar">Enviar alterações</button></div>
@@ -69,7 +85,11 @@
   let primeira = true;
   db.ref('letreiro/estado').on('value', (s) => {
     estado = s.val();
-    if (estado && primeira) { primeira = false; texto.value = estado.texto; vel.value = estado.velocidade; vv.textContent = estado.velocidade; if (estado.fonte) fonte.value = estado.fonte; }
+    if (estado && primeira) { primeira = false; texto.value = estado.texto; vel.value = estado.velocidade; vv.textContent = estado.velocidade; if (estado.fonte) fonte.value = estado.fonte;
+      modo.value = estado.modo || 'continuo';
+      tam.value = estado.tamanho || 12; tv.textContent = tam.value;
+      cor.value = estado.cor || '#39ff14';
+      mold.value = estado.moldura || 0; mv.textContent = mold.value; }
   });
   db.ref('letreiro/telas').on('value', (s) => { telas = s.val() || {}; desenhar(); });
   db.ref('letreiro/desativadas').on('value', (s) => { off = s.val() || {}; desenhar(); });
@@ -102,8 +122,10 @@
   }
   atualizar.onclick = () => db.ref('letreiro/recarregar').set(Date.now());
 
+  tam.oninput = () => tv.textContent = tam.value;
+  mold.oninput = () => mv.textContent = mold.value;
   vel.oninput = () => vv.textContent = vel.value;
-  enviar.onclick = () => db.ref('letreiro/estado').update({ texto: texto.value, velocidade: +vel.value, fonte: fonte.value });
+  enviar.onclick = () => db.ref('letreiro/estado').update({ texto: texto.value, velocidade: +vel.value, fonte: fonte.value, modo: modo.value, tamanho: +tam.value, cor: cor.value, moldura: +mold.value });
   iniciar.onclick = () => { if (estado && !estado.rodando) db.ref('letreiro/estado').update({ rodando: true, t0: estado.t0 + (agora() - estado.tPausa) }); };
   pausar.onclick = () => { if (estado && estado.rodando) db.ref('letreiro/estado').update({ rodando: false, tPausa: agora() }); };
   reiniciar.onclick = () => db.ref('letreiro/estado').update({ rodando: true, t0: agora() });
