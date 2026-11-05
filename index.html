@@ -132,17 +132,20 @@
         const v = estado.velocidade / 1000; // telas por segundo
         const agora = Date.now() + offset;
         const e = Math.max(0, ((estado.rodando ? agora : estado.tPausa) - estado.t0) / 1000);
+        const rtl = estado.direcao !== 'esq-dir'; // padrão: da direita para a esquerda
         if (estado.modo === 'sequencia') {
           // um computador por vez
           const T = (1 + u) / v;
           const vez = Math.floor(e / T) % lista.length;
           el.style.visibility = vez === idx ? 'visible' : 'hidden';
-          el.style.transform = `translate(${(-u + (e % T) * v) * W}px, -50%)`;
+          const xs = rtl ? 1 - (e % T) * v : -u + (e % T) * v;
+          el.style.transform = `translate(${xs * W}px, -50%)`;
         } else {
           // contínuo: o texto atravessa todas as telas emendado
           const g = (estado.moldura || 0) / 100; // espaço da moldura entre as telas
           const P = lista.length + (lista.length - 1) * g;
-          const x = -u + ((e * v) % (P + u));
+          const m = (e * v) % (P + u);
+          const x = rtl ? P - m : -u + m;
           el.style.visibility = 'visible';
           el.style.transform = `translate(${(x - idx * (1 + g)) * W}px, -50%)`;
         }

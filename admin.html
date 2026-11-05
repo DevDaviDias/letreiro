@@ -36,6 +36,9 @@
   <option value="teia">Teia (pontos conectados)</option>
 </select>
 
+<h3>Direção</h3>
+<button id="inverter">⇄ Inverter direção</button> <b id="dirtxt"></b>
+
 <h3>Modo</h3>
 <select id="modo" style="font-size:20px;padding:6px">
   <option value="continuo">Contínuo (o texto passa de uma tela para a outra, emendado)</option>
@@ -92,6 +95,7 @@
   let primeira = true;
   db.ref('letreiro/estado').on('value', (s) => {
     estado = s.val();
+    if (estado) dirtxt.textContent = estado.direcao === 'esq-dir' ? '→ da esquerda para a direita' : '← da direita para a esquerda';
     if (estado && primeira) { primeira = false; texto.value = estado.texto; vel.value = estado.velocidade; vv.textContent = estado.velocidade; if (estado.fonte) fonte.value = estado.fonte;
       modo.value = estado.modo || 'continuo'; fundo.value = estado.fundo || 'nenhum';
       tam.value = estado.tamanho || 12; tv.textContent = tam.value;
@@ -129,6 +133,10 @@
   }
   atualizar.onclick = () => db.ref('letreiro/recarregar').set(Date.now());
 
+  inverter.onclick = () => {
+    const rtl = !estado || estado.direcao !== 'esq-dir';
+    db.ref('letreiro/estado').update({ direcao: rtl ? 'esq-dir' : 'dir-esq' });
+  };
   tam.oninput = () => tv.textContent = tam.value;
   mold.oninput = () => mv.textContent = mold.value;
   vel.oninput = () => vv.textContent = vel.value;
