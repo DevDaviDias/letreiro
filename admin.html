@@ -29,6 +29,13 @@
   <option value="Pacifico, cursive">Pacifico (cursiva)</option>
 </select>
 
+<h3>Fundo animado</h3>
+<select id="fundo" style="font-size:20px;padding:6px">
+  <option value="nenhum">Nenhum (desativado)</option>
+  <option value="matrix">Matrix (letras caindo)</option>
+  <option value="teia">Teia (pontos conectados)</option>
+</select>
+
 <h3>Modo</h3>
 <select id="modo" style="font-size:20px;padding:6px">
   <option value="continuo">Contínuo (o texto passa de uma tela para a outra, emendado)</option>
@@ -86,7 +93,7 @@
   db.ref('letreiro/estado').on('value', (s) => {
     estado = s.val();
     if (estado && primeira) { primeira = false; texto.value = estado.texto; vel.value = estado.velocidade; vv.textContent = estado.velocidade; if (estado.fonte) fonte.value = estado.fonte;
-      modo.value = estado.modo || 'continuo';
+      modo.value = estado.modo || 'continuo'; fundo.value = estado.fundo || 'nenhum';
       tam.value = estado.tamanho || 12; tv.textContent = tam.value;
       cor.value = estado.cor || '#39ff14';
       mold.value = estado.moldura || 0; mv.textContent = mold.value; }
@@ -125,7 +132,7 @@
   tam.oninput = () => tv.textContent = tam.value;
   mold.oninput = () => mv.textContent = mold.value;
   vel.oninput = () => vv.textContent = vel.value;
-  enviar.onclick = () => db.ref('letreiro/estado').update({ texto: texto.value, velocidade: +vel.value, fonte: fonte.value, modo: modo.value, tamanho: +tam.value, cor: cor.value, moldura: +mold.value });
+  enviar.onclick = () => db.ref('letreiro/estado').update({ texto: texto.value, velocidade: +vel.value, fonte: fonte.value, modo: modo.value, fundo: fundo.value, tamanho: +tam.value, cor: cor.value, moldura: +mold.value });
   iniciar.onclick = () => { if (estado && !estado.rodando) db.ref('letreiro/estado').update({ rodando: true, t0: estado.t0 + (agora() - estado.tPausa) }); };
   pausar.onclick = () => { if (estado && estado.rodando) db.ref('letreiro/estado').update({ rodando: false, tPausa: agora() }); };
   reiniciar.onclick = () => db.ref('letreiro/estado').update({ rodando: true, t0: agora() });
